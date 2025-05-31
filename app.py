@@ -30,4 +30,39 @@ if api_key:
 
     session_id=st.text_input("Session ID", value="default_session")
 
+    if 'store' not in st.session_state:
+        st.session_state.store={}
     
+    uploaded_files=st.file_uploader("Choose a PDF File", type="pdf", accept_multiple_files=True)
+
+    if uploaded_files:
+        documents=[]
+        for uploaded_file in uploaded_files:
+            temppdf=f"./temp.pdf"
+            with open(temppdf,"wb") as file:
+                file.write(uploaded_file.get_value())
+                file_name=uploaded_file.name
+            
+            loader=PyPDFLoader(temppdf)
+            docs.loader.load()
+            documents.extend(docs)
+        
+        text_splitter=RecursiveCharacterSplitter(chunk_size=5000, chunk_overlap=500)
+        splits=text_splitter.split_documents(documents)
+        vectorstore=Chroma.from_documents(documents=splits, embedding=embeddings)
+        retriever=vectorstore.as_retriever()
+    
+    contextualize_q_system_prompt=(
+        "Given a chat history and the latest user question wich might"
+        "reference context in the chat history, formulate a standalone"
+        "question which can be understood without the chat history. Do not "
+        "answer the question, just reformulate it if needed and otherwise return it as it is"
+    )
+
+    contextualize_q_prompt=ChatPromptTemplate.from_messages(
+        [
+            ("system", contextualize_q_system_prompt),
+            MessagesPlaceholder("chat_history"),
+            ("human", "{input}"),
+        ]
+    )
